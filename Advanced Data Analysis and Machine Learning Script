@@ -1,0 +1,137 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Load the dataset (replace 'your_dataset.csv' with your actual dataset)
+df = pd.read_csv('your_dataset.csv')
+
+# Display the first few rows of the dataset
+print("Initial Data Preview:")
+print(df.head())
+
+# Step 1: Data Cleaning
+print("\nData Cleaning...")
+
+# Handle missing values
+df.fillna(df.median(), inplace=True)
+
+# Convert categorical variables to numeric
+label_encoders = {}
+categorical_columns = df.select_dtypes(include=['object']).columns
+
+for col in categorical_columns:
+    label_encoders[col] = LabelEncoder()
+    df[col] = label_encoders[col].fit_transform(df[col])
+
+# Step 2: Exploratory Data Analysis (EDA)
+print("\nExploratory Data Analysis (EDA)...")
+
+# Summary statistics
+print("\nSummary Statistics:")
+print(df.describe())
+
+# Correlation heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
+plt.title('Correlation Heatmap')
+plt.show()
+
+# Distribution of target variable (replace 'target_column' with your actual target column)
+plt.figure(figsize=(6, 4))
+sns.countplot(df['target_column'], palette='Set3')
+plt.title('Distribution of Target Variable')
+plt.show()
+
+# Pairplot of the dataset
+sns.pairplot(df, hue='target_column', diag_kind='kde')
+plt.title('Pairplot of Features')
+plt.show()
+
+# Step 3: Feature Engineering
+print("\nFeature Engineering...")
+
+# Feature scaling
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(df.drop('target_column', axis=1))
+
+df_scaled = pd.DataFrame(scaled_features, columns=df.columns[:-1])
+df_scaled['target_column'] = df['target_column']
+
+# Step 4: Model Building and Evaluation
+print("\nModel Building and Evaluation...")
+
+# Split the data into training and testing sets
+X = df_scaled.drop('target_column', axis=1)
+y = df_scaled['target_column']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Logistic Regression Model
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+y_pred_logreg = logreg.predict(X_test)
+
+print("\nLogistic Regression Model:")
+print(classification_report(y_test, y_pred_logreg))
+
+# Random Forest Classifier
+rfc = RandomForestClassifier(random_state=42)
+rfc.fit(X_train, y_train)
+y_pred_rfc = rfc.predict(X_test)
+
+print("\nRandom Forest Classifier:")
+print(classification_report(y_test, y_pred_rfc))
+
+# Step 5: Model Tuning using Grid Search
+print("\nModel Tuning with Grid Search...")
+
+# Grid Search for Random Forest
+param_grid = {
+    'n_estimators': [100, 200, 300],
+    'max_depth': [10, 20, 30],
+    'min_samples_split': [2, 5, 10]
+}
+
+grid_search = GridSearchCV(estimator=rfc, param_grid=param_grid, cv=5, n_jobs=-1, verbose=2)
+grid_search.fit(X_train, y_train)
+
+print("\nBest Parameters from Grid Search:")
+print(grid_search.best_params_)
+
+# Re-train the model with best parameters
+best_rfc = grid_search.best_estimator_
+y_pred_best_rfc = best_rfc.predict(X_test)
+
+print("\nRandom Forest with Best Parameters:")
+print(classification_report(y_test, y_pred_best_rfc))
+
+# Step 6: Model Evaluation with ROC-AUC
+print("\nModel Evaluation with ROC-AUC...")
+
+# Calculate ROC-AUC
+logreg_roc_auc = roc_auc_score(y_test, logreg.predict_proba(X_test)[:, 1])
+rfc_roc_auc = roc_auc_score(y_test, best_rfc.predict_proba(X_test)[:, 1])
+
+# Plot ROC Curve
+fpr_logreg, tpr_logreg, _ = roc_curve(y_test, logreg.predict_proba(X_test)[:, 1])
+fpr_rfc, tpr_rfc, _ = roc_curve(y_test, best_rfc.predict_proba(X_test)[:, 1])
+
+plt.figure(figsize=(10, 6))
+plt.plot(fpr_logreg, tpr_logreg, label=f'Logistic Regression (AUC = {logreg_roc_auc:.2f})')
+plt.plot(fpr_rfc, tpr_rfc, label=f'Random Forest (AUC = {rfc_roc_auc:.2f})')
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve')
+plt.legend(loc='lower right')
+plt.show()
